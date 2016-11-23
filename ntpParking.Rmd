@@ -1,0 +1,496 @@
+---
+title: "ntpParking"
+author: "蔡欽堯 / 李思穎"
+date: "2016年10月22日"
+output: html_document
+---
+
+```{r results="asis"}
+cat("
+<style>
+div.des {
+  background-color : rgb(23, 21, 27);
+  color : white;
+  margin : 20px 0 20px 0;
+  padding : 20px;
+  font-family : Arial, Helvetica, sans-serif;
+  font-size : 16px;
+}
+
+div.res {
+  background-color : blue;
+  color : white;
+  margin : 20px 0 20px 0;
+  padding : 20px;
+  font-family : Arial, Helvetica, sans-serif;
+  font-size : 16px;
+}
+</style>
+")
+```
+<div class="des">
+  加載library <br>
+  library("dplyr") <br>
+  library("jsonlite") <br>
+  library("leaflet") <br>
+  library(plotrix)
+</div>
+
+```{r}
+  library("dplyr")
+  library("jsonlite")
+  library("leaflet")
+  library("plotrix")
+```
+
+<div class="des">
+  匯入資料 <br>
+  資料格式 : JSON / CSV <br>
+  資料內容 : 新北市路外公共停車場資訊 / 新北市公有路外停車場即時賸餘車位數 <br>
+  收集時間 : 10 / 17 ~ 10 / 19 日08:00、12:00、16:00、20:00、23:00
+</div>
+<div class="des">
+  資料處理方式 <br>
+  (1) 將15個路外停車場即時賸餘車位數CSV檔案匯入，另外透過url自網路取得新北市路外公共停車場資訊的Json data <br>
+  (2) 針對資料中有重複性的停車場ID資訊進行過濾 <br>
+  (3) 再依據有提供即時車位資訊的停車場進行過濾 <br>
+  (4) 過濾掉停車場資訊中車位數小於即時剩餘車位的資訊( 不合理的資訊 ) <br>
+  (5) 將TWD97座標系統資訊轉成WGS84座標系統資訊 <br>
+  (6) 將16筆資料整併到一個data frame，並將WGS84座標系統資訊加入到data frame中
+</div>
+```{r}
+# setwd("d:/Dropbox/R/avaPark")
+
+dtp <- c("p1708", "p1712", "p1716", "p1720", "p1723",
+         "p1808", "p1812", "p1816", "p1820", "p1823",
+         "p1908", "p1912", "p1916", "p1920", "p1923")
+temp = list.files(pattern = "*.csv")
+
+for(i in 1:length(temp)) 
+  assign(dtp[i], read.csv(temp[i],
+                          fileEncoding = "BIG-5",
+                          stringsAsFactors = F))
+
+# 新北市路外公共停車場資訊
+url <- 'http://data.ntpc.gov.tw/api/v1/rest/datastore/382000000A-000225-002'
+park <- fromJSON(url)
+park <- as.data.frame(park[[2]]$records)
+
+# 重新進行排序
+park <- park[with(park, order(ID)), ]
+
+# 過濾掉重複的ID車場
+park <- park[!duplicated(park[, 'ID']), ]
+
+park <- park[which(park$AREA == "板橋區"), ]
+park$ID <- as.integer(park$ID)
+park$TOTALCAR <- as.integer(ifelse(is.na(park$TOTALCAR), 0, park$TOTALCAR))
+
+# 過濾掉重複的ID車場以及未提供即時剩餘車位的資訊
+p1708 <- p1708[!duplicated(p1708[, 'ID']), ]
+p1708 <- p1708[which(p1708$X1708 != -9),]
+
+p1712 <- p1712[!duplicated(p1712[, 'ID']), ]
+p1712 <- p1712[which(p1712$X1712 != -9),]
+
+p1716 <- p1716[!duplicated(p1716[, 'ID']), ]
+p1716 <- p1716[which(p1716$X1716 != -9),]
+
+p1720 <- p1720[!duplicated(p1720[, 'ID']), ]
+p1720 <- p1720[which(p1720$X1720 != -9),]
+
+p1723 <- p1723[!duplicated(p1723[, 'ID']), ]
+p1723 <- p1723[which(p1723$X1723 != -9),]
+
+p1808 <- p1808[!duplicated(p1808[, 'ID']), ]
+p1808 <- p1808[which(p1808$X1808 != -9),]
+
+p1812 <- p1812[!duplicated(p1812[, 'ID']), ]
+p1812 <- p1812[which(p1812$X1812 != -9),]
+
+p1816 <- p1816[!duplicated(p1816[, 'ID']), ]
+p1816 <- p1816[which(p1816$X1816 != -9),]
+
+p1820 <- p1820[!duplicated(p1820[, 'ID']), ]
+p1820 <- p1820[which(p1820$X1820 != -9),]
+
+p1823 <- p1823[!duplicated(p1823[, 'ID']), ]
+p1823 <- p1823[which(p1823$X1823 != -9),]
+
+p1908 <- p1908[!duplicated(p1908[, 'ID']), ]
+p1908 <- p1908[which(p1908$X1908 != -9),]
+
+p1912 <- p1912[!duplicated(p1912[, 'ID']), ]
+p1912 <- p1912[which(p1912$X1912 != -9),]
+
+p1916 <- p1916[!duplicated(p1916[, 'ID']), ]
+p1916 <- p1916[which(p1916$X1916 != -9),]
+
+p1920 <- p1920[!duplicated(p1920[, 'ID']), ]
+p1920 <- p1920[which(p1920$X1920 != -9),]
+
+p1923 <- p1923[!duplicated(p1923[, 'ID']), ]
+p1923 <- p1923[which(p1923$X1923 != -9),]
+
+source("TWD97TM2toWGS84.R")
+WGS84 <- TWD97TM2toWGS84(park$TW97X, park$TW97Y)
+
+ptable <- 
+  park %>%
+  mutate(WGS84X = WGS84$lat) %>%
+  mutate(WGS84Y = WGS84$lon) %>%
+  merge(p1708, by = "ID", all = FALSE) %>%
+  merge(p1712, by = "ID", all = FALSE) %>%
+  merge(p1716, by = "ID", all = FALSE) %>%
+  merge(p1720, by = "ID", all = FALSE) %>%
+  merge(p1723, by = "ID", all = FALSE) %>%
+  merge(p1808, by = "ID", all = FALSE) %>%
+  merge(p1812, by = "ID", all = FALSE) %>%
+  merge(p1816, by = "ID", all = FALSE) %>%
+  merge(p1820, by = "ID", all = FALSE) %>%
+  merge(p1823, by = "ID", all = FALSE) %>%
+  merge(p1908, by = "ID", all = FALSE) %>%
+  merge(p1912, by = "ID", all = FALSE) %>%
+  merge(p1916, by = "ID", all = FALSE) %>%
+  merge(p1920, by = "ID", all = FALSE) %>%
+  merge(p1923, by = "ID", all = FALSE) 
+
+# 過濾掉停車場資訊中車位數小於即時剩餘車位的資訊( 不合理的資訊 )
+ptable <- ptable[which(ptable$TOTALCAR > ptable$X1708 &
+                         ptable$TOTALCAR > ptable$X1712 &
+                         ptable$TOTALCAR > ptable$X1716 & 
+                         ptable$TOTALCAR > ptable$X1720 &
+                         ptable$TOTALCAR > ptable$X1723 & 
+                         ptable$TOTALCAR > ptable$X1808 & 
+                         ptable$TOTALCAR > ptable$X1812 & 
+                         ptable$TOTALCAR > ptable$X1816 & 
+                         ptable$TOTALCAR > ptable$X1820 & 
+                         ptable$TOTALCAR > ptable$X1823 &
+                         ptable$TOTALCAR > ptable$X1908 &
+                         ptable$TOTALCAR > ptable$X1912 &
+                         ptable$TOTALCAR > ptable$X1916 & 
+                         ptable$TOTALCAR > ptable$X1920 &
+                         ptable$TOTALCAR > ptable$X1923), ]
+
+head(ptable)
+tail(ptable)
+
+for(i in 1 : nrow(ptable)){
+  ptable$used_x1708[i] = ptable$TOTALCAR[i] - ptable$X1708[i]
+  ptable$used_x1712[i] = ptable$TOTALCAR[i] - ptable$X1712[i]
+  ptable$used_x1716[i] = ptable$TOTALCAR[i] - ptable$X1716[i]
+  ptable$used_x1720[i] = ptable$TOTALCAR[i] - ptable$X1720[i]
+  ptable$used_x1723[i] = ptable$TOTALCAR[i] - ptable$X1723[i]
+  ptable$used_x1808[i] = ptable$TOTALCAR[i] - ptable$X1808[i]
+  ptable$used_x1812[i] = ptable$TOTALCAR[i] - ptable$X1812[i]
+  ptable$used_x1816[i] = ptable$TOTALCAR[i] - ptable$X1816[i]
+  ptable$used_x1820[i] = ptable$TOTALCAR[i] - ptable$X1820[i]
+  ptable$used_x1823[i] = ptable$TOTALCAR[i] - ptable$X1823[i]
+  ptable$used_x1908[i] = ptable$TOTALCAR[i] - ptable$X1908[i]
+  ptable$used_x1912[i] = ptable$TOTALCAR[i] - ptable$X1912[i]
+  ptable$used_x1916[i] = ptable$TOTALCAR[i] - ptable$X1916[i]
+  ptable$used_x1920[i] = ptable$TOTALCAR[i] - ptable$X1920[i]
+  ptable$used_x1923[i] = ptable$TOTALCAR[i] - ptable$X1923[i]
+  ptable$avamean[i] = mean(c(ptable$X1708[i], ptable$X1712[i],
+                             ptable$X1716[i], ptable$X1720[i],
+                             ptable$X1723[i], ptable$X1808[i],
+                             ptable$X1812[i], ptable$X1816[i],
+                             ptable$X1820[i], ptable$X1823[i],
+                             ptable$X1908[i], ptable$X1912[i],
+                             ptable$X1916[i], ptable$X1920[i],
+                             ptable$X1923[i]))
+  
+  ptable$UsedRate_x1708[i] = ptable$used_x1708[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1712[i] = ptable$used_x1712[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1716[i] = ptable$used_x1716[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1720[i] = ptable$used_x1720[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1723[i] = ptable$used_x1723[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1808[i] = ptable$used_x1808[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1812[i] = ptable$used_x1812[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1816[i] = ptable$used_x1816[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1820[i] = ptable$used_x1820[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1823[i] = ptable$used_x1823[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1908[i] = ptable$used_x1908[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1912[i] = ptable$used_x1912[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1916[i] = ptable$used_x1916[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1920[i] = ptable$used_x1920[i] / ptable$TOTALCAR[i]
+  ptable$UsedRate_x1923[i] = ptable$used_x1923[i] / ptable$TOTALCAR[i]
+  ptable$UseRatemean[i] = mean(c(ptable$UsedRate_x1708[i], ptable$UsedRate_x1712[i],
+                                 ptable$UsedRate_x1716[i], ptable$UsedRate_x1720[i],
+                                 ptable$UsedRate_x1723[i], ptable$UsedRate_x1808[i],
+                                 ptable$UsedRate_x1812[i], ptable$UsedRate_x1816[i],
+                                 ptable$UsedRate_x1820[i], ptable$UsedRate_x1823[i],
+                                 ptable$UsedRate_x1908[i], ptable$UsedRate_x1912[i],
+                                 ptable$UsedRate_x1916[i], ptable$UsedRate_x1920[i],
+                                 ptable$UsedRate_x1923[i]))
+}
+```
+<div class="des">
+  板橋區停車場 10 / 17 ~ 10 / 19 平均使用率分布地圖
+</div>
+```{r}
+pal <- colorBin(palette = c("green", "pink", "blue", "orange", "red"),
+                bin = c(0, 0.2, 0.4, 0.6, 0.8, 1.0),
+                pretty = TRUE,
+                na.color = "black", 
+                alpha = F)
+```
+<div class="res">
+  板橋區停車場 10 / 17 ~ 10 / 19 平均使用率分布 <br>
+    20% 以下 : 綠色 <br>
+    20% ~ 40% : 粉紅色 <br>
+    40% ~ 60% : 藍色 <br>
+    60% ~ 80% : 橘色 <br>
+    80% 以上 : 紅色
+</div>
+```{r}
+getrRadius <- function(x){
+  ifelse(ptable$avamean < 20, 15,
+         ifelse(ptable$avamean < 40, 20,
+                ifelse(ptable$avamean < 60, 25,
+                       ifelse(ptable$avamean < 80, 30, 35))))
+}
+
+map <- 
+  leaflet() %>%
+  addTiles() %>%  # 加上預設的地圖資料
+  addCircles(lat = ptable$WGS84X, 
+                   lng = ptable$WGS84Y, 
+                   radius = getrRadius(ptable$avamean),
+                   popup = paste("名稱:", ptable$NAME, "<br>",
+                                 "停車場類型:", ptable$SUMMARY, "<br>",
+                                 "車位數量:", ptable$TOTALCAR, "<br>",
+                                 "地址:", ptable$ADDRESS, "<br>",
+                                 "平均使用率:", ptable$UseRatemean, "<br>",
+                                 "平均剩餘空位數:", ptable$avamean),
+                   color = pal(ptable$UseRatemean))
+map  # 繪製地圖
+
+
+rateCnt <- c(usg0to20 = length(which(ptable$UseRatemean <= 0.2)) / length(ptable$UseRatemean),
+             usg20to40 = length(which(ptable$UseRatemean <= 0.4 & ptable$UseRatemean > 0.2)) / length(ptable$UseRatemean),
+             usg40t060 = length(which(ptable$UseRatemean <= 0.6 & ptable$UseRatemean > 0.4)) / length(ptable$UseRatemean),
+             usg60to80 = length(which(ptable$UseRatemean <= 0.8 & ptable$UseRatemean > 0.6)) / length(ptable$UseRatemean),
+             usg80to100 = length(which(ptable$UseRatemean > 0.8)) / length(ptable$UseRatemean))
+
+rateCnt
+pie(rateCnt, 
+    # explode = 0.1,
+    labels = c("車位使用低於兩成", 
+               "車位使用高於兩成低於四成",
+               "車位使用高於四成低於六成",
+               "車位使用高於六成低於八成",
+               "車位使用超過八成"), 
+    main = "板橋區停車場 10 / 17 ~ 10 / 19 平均使用率比重")
+
+```
+<div class="des">
+  比較板橋區不同類型停車場的平均使用率
+</div>
+```{r}
+# 比較板橋區不同類型停車場的平均使用率
+sumTable3 <-
+ptable %>% 
+  filter(AREA == "板橋區")%>%
+  select(
+    SUMMARY, UsedRate_x1708, UsedRate_x1712, UsedRate_x1716, UsedRate_x1720, UsedRate_x1723, 
+    UsedRate_x1808, UsedRate_x1812, UsedRate_x1816, UsedRate_x1820, UsedRate_x1823, 
+    UsedRate_x1908, UsedRate_x1912, UsedRate_x1916, UsedRate_x1920, UsedRate_x1923
+  ) %>%
+  group_by(SUMMARY) %>%
+  summarise(
+    "AVRUR(%)" = round(mean(c(UsedRate_x1708, UsedRate_x1712, UsedRate_x1716, 
+                     UsedRate_x1720, UsedRate_x1723, UsedRate_x1808, 
+                     UsedRate_x1812, UsedRate_x1816, UsedRate_x1820,
+                     UsedRate_x1823, UsedRate_x1908, UsedRate_x1912,
+                     UsedRate_x1916, UsedRate_x1920, UsedRate_x1923)),digits = 3) * 100
+  )
+```
+<div class="res">
+  停車場類型 <br>
+  type1 : 平面式多目標附建停車場 <br>
+  type2 : 平面式都市計畫停車場 <br>
+  type3 : 平面式臨時路外停車場 <br>
+  type4 : 立體式-塔臺都市計畫停車場 <br>
+  type5 : 立體式-機械多目標附建停車場 <br>
+  type6 : 立體式多目標附建停車場 <br>
+  type7 : 立體式建築附設停車空間 <br>
+  type8 : 立體式都市計畫停車場
+</div>
+```{r}
+barplot(sumTable3$`AVRUR(%)`,
+        main = "平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(80,70,60,50,40,30,20,10))
+```
+<div class="des">
+  板橋區不同時間點(0800, 1200, 1600, 2000, 2300)的平均使用率
+</div>
+```{r}
+# 板橋區不同時間點(0800, 1200, 1600, 2000, 2300)的平均使用率
+sumTable2 <-
+ptable %>% 
+  filter(AREA == "板橋區")%>%
+  select(UsedRate_x1708, UsedRate_x1712, UsedRate_x1716, UsedRate_x1720, UsedRate_x1723, 
+         UsedRate_x1808, UsedRate_x1812, UsedRate_x1816, UsedRate_x1820, UsedRate_x1823, 
+         UsedRate_x1908, UsedRate_x1912, UsedRate_x1916, UsedRate_x1920, UsedRate_x1923
+  ) %>%
+  summarise(
+    "0800_AVRUR(%)" = round(mean(c(UsedRate_x1708,UsedRate_x1808,UsedRate_x1908)), 
+                            digits = 3) * 100,
+    "1200_AVRUR(%)" = round(mean(c(UsedRate_x1712,UsedRate_x1812,UsedRate_x1912)), 
+                            digits = 3) * 100,
+    "1600_AVRUR(%)" = round(mean(c(UsedRate_x1716,UsedRate_x1816,UsedRate_x1916)),
+                            digits = 3) * 100,
+    "2000_AVRUR(%)" = round(mean(c(UsedRate_x1720,UsedRate_x1820,UsedRate_x1920)),
+                            digits = 3) * 100,
+    "2300_AVRUR(%)" = round(mean(c(UsedRate_x1723,UsedRate_x1823,UsedRate_x1923)),
+                            digits = 3) * 100
+  )
+```
+<div class="res">
+  時間 vs 平均使用率
+</div>
+```{r}
+barplot(c(sumTable2[1, 1], sumTable2[1, 2], sumTable2[1, 3], sumTable2[1, 4], sumTable2[1, 5]),
+        main = "平均使用率", 
+        ylab="使用率 %",
+        xlab="時間", 
+        col = c(1:5), 
+        ylim = c(0, 100), 
+        names.arg = c("08:00", "12:00", "16:00", "20:00",
+                      "23:00"),
+        density=c(10,20,30,40,50))
+```
+<div class="des">
+  停車場類型不同時間點的平均使用率
+</div>
+```{r}
+# 比較板橋區不同類型停車場 & 不同時間點的平均使用率
+sumTable <-
+ptable %>% 
+  filter(AREA == "板橋區")%>%
+  select(SUMMARY, UsedRate_x1708, UsedRate_x1712, UsedRate_x1716,
+         UsedRate_x1720, UsedRate_x1723, UsedRate_x1808, UsedRate_x1812,
+         UsedRate_x1816, UsedRate_x1820, UsedRate_x1823, UsedRate_x1908, 
+         UsedRate_x1912, UsedRate_x1916, UsedRate_x1920, UsedRate_x1923) %>%
+  group_by(SUMMARY) %>%
+  summarise(
+  "AllTime_AVRTU(%)" = round(mean(c(
+    UsedRate_x1708, UsedRate_x1712, UsedRate_x1716, UsedRate_x1720, UsedRate_x1723, 
+    UsedRate_x1808, UsedRate_x1812, UsedRate_x1816, UsedRate_x1820, UsedRate_x1823, 
+    UsedRate_x1908, UsedRate_x1912, UsedRate_x1916, UsedRate_x1920, UsedRate_x1923
+  )), digits = 3) * 100,
+  "0800_AVRTU(%)" = round(mean(c(UsedRate_x1708,UsedRate_x1808,UsedRate_x1908)),digits = 3) * 100,
+  "1200_AVRTU(%)" = round(mean(c(UsedRate_x1712,UsedRate_x1812,UsedRate_x1912)),digits = 3) * 100,
+  "1600_AVRTU(%)" = round(mean(c(UsedRate_x1716,UsedRate_x1816,UsedRate_x1916)),digits = 3) * 100,
+  "2000_AVRTU(%)" = round(mean(c(UsedRate_x1720,UsedRate_x1820,UsedRate_x1920)),digits = 3) * 100,
+  "2300_AVRTU(%)" = round(mean(c(UsedRate_x1723,UsedRate_x1823,UsedRate_x1923)),digits = 3) * 100
+  )
+
+```
+<div class="res">
+  停車場類型 <br>
+  type1 : 平面式多目標附建停車場 <br>
+  type2 : 平面式都市計畫停車場 <br>
+  type3 : 平面式臨時路外停車場 <br>
+  type4 : 立體式-塔臺都市計畫停車場 <br>
+  type5 : 立體式-機械多目標附建停車場 <br>
+  type6 : 立體式多目標附建停車場 <br>
+  type7 : 立體式建築附設停車空間 <br>
+  type8 : 立體式都市計畫停車場
+</div>
+```{r}
+barplot(sumTable$'AllTime_AVRTU(%)',
+        main = "停車場類型平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(10,20,30,40,50,60,70,80))
+
+barplot(sumTable$'0800_AVRTU(%)',
+        main = "08:00停車場類型平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(10,20,30,40,50,60,70,80))
+
+barplot(sumTable$'1200_AVRTU(%)',
+        main = "12:00停車場類型平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(10,20,30,40,50,60,70,80))
+
+barplot(sumTable$'1600_AVRTU(%)',
+        main = "16:00停車場類型平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(10,20,30,40,50,60,70,80))
+
+barplot(sumTable$'2000_AVRTU(%)',
+        main = "20:00停車場類型平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(10,20,30,40,50,60,70,80))
+
+barplot(sumTable$'2300_AVRTU(%)',
+        main = "23:00停車場類型平均使用率", 
+        ylab="使用率 %",
+        xlab="停車場類型", 
+        col = c(1:8), 
+        ylim = c(0, 100), 
+        names.arg = c("type1", "type2", "type3", "type4",
+                      "type5", "type6", "type7", "type8"),
+        density=c(10,20,30,40,50,60,70,80))
+```
+
+
+<div class="res">
+  即時直接自開放平台下載剩餘車位資訊地圖
+</div>
+```{r}
+url <- 'http://data.ntpc.gov.tw/api/v1/rest/datastore/382000000A-000292-002'
+currpark <- fromJSON(url)
+currpark <- as.data.frame(currpark[2]$result$records) # or currpark[2]records
+currpark <- currpark[!duplicated(currpark[, 'ID']), ]
+currpark$ID <- as.integer(currpark$ID)
+currpark$AVAILABLECAR <- as.integer(currpark$AVAILABLECAR)
+currpark <- currpark[which(currpark$AVAILABLECAR > 10),]
+ptable <- merge(ptable, currpark, by = "ID", all.x = FALSE)
+
+map1 <- 
+  leaflet() %>%
+  addTiles() %>%  # 加上預設的地圖資料
+  addMarkers(lat = ptable$WGS84X, 
+                   lng = ptable$WGS84Y,
+                   popup = paste("名稱:", ptable$NAME, "<br>",
+                                 "停車場類型:", ptable$SUMMARY, "<br>",
+                                 "地址:", ptable$ADDRESS, "<br>",
+                                 "目前剩餘空位數:", ptable$AVAILABLECAR))
+map1  # 繪製地圖
+
+```
+
